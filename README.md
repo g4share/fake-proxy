@@ -4,15 +4,27 @@
 
 ---
 
+## 📑 Table of Contents
+- [💡 Overview](#-overview)
+- [⚙️ Example Usage](#-example-usage)
+- [🏗️ Building the ZIP Package](#-building-the-zip-package)
+- [🚀 Running the Application](#-running-the-application)
+- [🧩 Command-Line Parameters](#-command-line-parameters)
+- [⚙️ Configuration](#-configuration)
+- [📋 Configuration Priority](#-configuration-priority)
+- [🧩 License](#-license)
+
+---
+
 ## 💡 Overview
 
-**Fake Proxy** acts as a lightweight **HTTP/HTTPS interception proxy**, designed to help you inspect, log, and understand real network traffic in environments where installing GUI tools like Charles or Fiddler isn’t possible.
+**Fake Proxy** acts as a lightweight **HTTP/HTTPS interception proxy**, designed to help you inspect, log, and modify real network traffic in environments where installing GUI tools like Charles or Fiddler isn’t possible.
 
 It enables:
 - Logging of HTTP and HTTPS requests and responses
 - Selective inspection based on host or URL patterns
 - Selective header logging — only the headers you care about are shown
-- *(Planned)* request modification on the fly
+- Dynamic modification of requests (URL, headers, body)
 
 It’s particularly useful in restricted or headless environments where you:
 - Have only SSH or command-line access
@@ -51,10 +63,9 @@ curl --cacert ./littleproxy-mitm.pem \
 The proxy will log the full request and response in the terminal, without requiring any graphical interface.
 
 * Certificates for MITM (Man-In-The-Middle) interception are generated automatically when the application starts (`littleproxy-mitm.pem`, `littleproxy-mitm.p12`).
-* **TODO:** Add generation of certificates compatible with Tomcat for HTTPS interception.
+* **TIP:** Use `--port 0` to bind the proxy to a random available port — it will print the chosen port in the console.
 
 ---
-
 ## 🏗️ Building the ZIP Package
 
 To build the application and create the deployable ZIP package, run:
@@ -101,6 +112,120 @@ The proxy will start using the default configuration and listen on port **8888**
 
 ---
 
+## 🧩 Command-Line Parameters
+
+The application accepts the following command-line options:
+
+| Parameter       | Description                                                   | Example                                            |
+|-----------------|---------------------------------------------------------------|----------------------------------------------------|
+| `--port`        | Listening port (use `0` for random free port)                 | `--port 0`                                         |
+| `--proxyHost`   | Upstream proxy host                                           | `--proxyHost corp-proxy.local`                     |
+| `--proxyPort`   | Upstream proxy port                                           | `--proxyPort 8080`                                 |
+| `--yaml`        | Path to external YAML config file                             | `--yaml my-config.yaml`                            |
+| `--urlPatterns` | One or more URL patterns to filter (can repeat)               | `--urlPatterns "^example\.com$"`                   |
+| `--logHeader`   | Headers to be logged (can repeat)                             | `--logHeader Content-Type --logHeader Accept`      |
+| `--url`         | Rewrite request path and query (relative, without host)       | `--url /api/v2/test?id=1`                          |
+| `--setHeader`   | Header update: `name[=value]` (repeatable; no value → delete) | `--setHeader X-Test=123 --setHeader Authorization` |
+| `--body`        | Override request body (raw data or `file://<path>`)           | `--body "{ \"foo\": \"bar\" }"`                    |
+
+---
+
+### 🧠 Example: Random Port
+
+Start proxy on a random free port:
+
+```bash
+java -jar fake-proxy-1.0.jar --port 0
+```
+
+Output:
+
+```
+Proxy started on random port: 52917
+```
+
+### 🧠 Example: Run with URL Filtering and Header Selection
+
+Run command:
+
+```bash
+java -jar fake-proxy-1.0.jar \
+      --urlPatterns "^jsonplaceholder\.typicode\.com(:443)?$" \
+      --logHeader Content-Type \
+      --logHeader Accept
+```
+
+Test request:
+
+```bash
+curl --cacert ~/fake-proxy/fake-proxy-1.0/littleproxy-mitm.pem \
+     -x http://localhost:8888 \
+     -X POST "https://jsonplaceholder.typicode.com/posts" \
+     -H "Content-Type: application/json" \
+     -d '{ "title": "Proxy test", "body": "Checking proxy","userId": 1 }'
+```
+
+Expected Fake Proxy output:
+
+```
+Proxy started on port 8888
+
+>>> CONNECT jsonplaceholder.typicode.com:443
+
+>>> POST jsonplaceholder.typicode.com/posts
+    Accept: */*
+    Content-Type: application/json
+
+{ "title": "Proxy test", "body": "Checking proxy","userId": 1 }
+
+<<< Response Status: 201 Created
+    Content-Type: application/json; charset=utf-8
+
+{
+  "title": "Proxy test",
+  "body": "Checking proxy",
+  "userId": 1,
+  "id": 101
+}
+```
+
+---
+
+### 🧠 Example: Modifying Request Data
+
+Fake Proxy can rewrite URL, headers, or body before forwarding the request.
+
+Example CLI:
+
+```bash
+java -jar fake-proxy-1.0.jar \
+     --url /posts \
+     --setHeader "User-Agent=FakeProxyTest/1.0" \
+     --body "{ \"title\": \"Proxy test\", \"body\": \"Checking proxy\", \"userId\": 42 }"
+```
+
+Run a test via `curl`:
+
+```bash
+curl --cacert ~/fake-proxy/fake-proxy-1.0/littleproxy-mitm.pem \
+     -x http://localhost:8888 \
+     -X POST "https://jsonplaceholder.typicode.com/posts" \
+     -H "Content-Type: application/json" \
+     -d '{ "title": "Proxy test", "body": "Checking proxy","userId": 7 }'
+```
+
+**Server response:**
+```json
+{
+  "title": "Proxy test",
+  "body": "Checking proxy",
+  "userId": 42,
+  "id": 101
+}
+```
+
+---
+
 ## ⚙️ Configuration
 
 You can configure the application either via command-line arguments or using an external YAML file.
@@ -142,35 +267,6 @@ java -jar fake-proxy-1.0.jar --yaml my-config.yaml
 
 ---
 
-## 🧩 Command-Line Parameters
-
-The application accepts the following command-line options:
-
-| Parameter       | Description                                     | Example                                                     |
-|-----------------|-------------------------------------------------|-------------------------------------------------------------|
-| `--port`        | Listening port for the proxy                    | `--port 9999`                                               |
-| `--proxyHost`   | Upstream proxy host                             | `--proxyHost corp-proxy.local`                              |
-| `--proxyPort`   | Upstream proxy port                             | `--proxyPort 8080`                                          |
-| `--urlPatterns` | One or more URL patterns to filter (can repeat) | `--urlPatterns "^example\.com$" --urlPatterns "^api\.org$"` |
-| `--headers`     | Headers to be logged (can repeat)               | `--headers Content-Type --headers Accept`                   |
-| `--yaml`        | Path to external YAML config file               | `--yaml my-config.yaml`                                     |
-
-### Combined Example
-
-You can combine a YAML file with command-line arguments. CLI parameters always have the highest priority:
-
-```bash
-java -jar fake-proxy-1.0.jar \
-        --yaml my-config.yaml \
-        --port 9999 \
-        --proxyHost proxy.internal \
-        --proxyPort 8081 \
-        --headers Content-Type \
-        --headers Authorization
-```
-
----
-
 ## 📋 Configuration Priority
 
 | Priority | Source                                         | Description                     |
@@ -181,82 +277,6 @@ java -jar fake-proxy-1.0.jar \
 
 If a parameter appears in multiple places, the value from the higher-priority source is used.
 
----
-
-## 🧠 Example in Practice
-
-Given this configuration file (`my-config.yaml`):
-
-```yaml
-listeningPort: 8888
-proxy:
-  host: proxy.default
-  port: 8080
-```
-
-and this command:
-
-```bash
-java -jar fake-proxy-1.0.jar \
-    --yaml my-config.yaml \
-    --proxyHost my-proxy.local \
-    --proxyPort 3128
-```
-
-The final configuration used by the app will be:
-
-```
-listeningPort = 8888
-proxy.host = my-proxy.local
-proxy.port = 3128
-```
-
----
-
-### 🔧 Example Run with URL Filtering and Header Selection
-
-Run command:
-
-```bash
-java -jar fake-proxy-1.0.jar \
-    --urlPatterns "^jsonplaceholder\.typicode\.com(:443)?$" \
-    --headers Content-Type \
-    --headers Accept
-```
-
-Test request:
-
-```bash
-curl --cacert ~/fake-proxy/fake-proxy-1.0/littleproxy-mitm.pem \
-     -x http://localhost:8888 \
-     -X POST "https://jsonplaceholder.typicode.com/posts" \
-     -H "Content-Type: application/json" \
-     -d '{ "title": "Proxy test", "body": "Checking proxy","userId": 1 }'
-```
-
-Expected Fake Proxy output:
-
-```
-Proxy started on port 8888
-
->>> CONNECT jsonplaceholder.typicode.com:443
-
->>> POST jsonplaceholder.typicode.com/posts
-    Accept: */*
-    Content-Type: application/json
-
-{ "title": "Proxy test", "body": "Checking proxy","userId": 1 }
-
-<<< Response Status: 201 Created
-    Content-Type: application/json; charset=utf-8
-
-{
-  "title": "Proxy test",
-  "body": "Checking proxy",
-  "userId": 1,
-  "id": 101
-}
-```
 
 ---
 

@@ -23,8 +23,20 @@ public class CliConfig {
         urlPatternsOpt.setArgs(Option.UNLIMITED_VALUES);
         options.addOption(urlPatternsOpt);
 
-        Option headersOpt = new Option(null, "headers", true, "Headers to be logged (multiple options)");
+        Option headersOpt = new Option(null, "logHeader", true,
+                "Headers to be logged (multiple options)");
         headersOpt.setArgs(Option.UNLIMITED_VALUES);
+
+        options.addOption(new Option(null, "url", true,
+                "Rewrite request path and query (relative, without host)."));
+
+        Option headerOpt = new Option(null, "setHeader", true,
+                "Header update: name[=value] (repeatable; no value => delete)");
+        headerOpt.setArgs(Option.UNLIMITED_VALUES);
+        options.addOption(headerOpt);
+
+        options.addOption(new Option(null, "body", true, "Override request body: raw text or file://<path>"));
+
         options.addOption(headersOpt);
     }
 

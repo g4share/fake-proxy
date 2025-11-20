@@ -11,7 +11,7 @@ import java.util.Map;
 public class Filter {
 
     private List<String> urlPatterns;
-    private List<String> filteredHeaders;
+    private List<String> logHeaders;
 
     public boolean isFiltered(final String url) {
         if (urlPatterns == null || urlPatterns.isEmpty()) {
@@ -20,16 +20,16 @@ public class Filter {
         return urlPatterns.stream().anyMatch(url::matches);
     }
 
-    public Map<String, String> filteredHeaders(final HttpHeaders headers) {
+    public Map<String, String> logHeaders(final HttpHeaders headers) {
         Map<String, String> result = new LinkedHashMap<>();
 
-        if (filteredHeaders == null || filteredHeaders.isEmpty()) {
+        if (logHeaders == null || logHeaders.isEmpty()) {
             headers.forEach(h -> result.put(h.getKey(), h.getValue()));
             return result;
         }
         for (Map.Entry<String, String> entry : headers) {
             String name = entry.getKey();
-            if (filteredHeaders.stream().anyMatch(f -> f.equalsIgnoreCase(name))) {
+            if (logHeaders.stream().anyMatch(f -> f.equalsIgnoreCase(name))) {
                 result.put(name, entry.getValue());
             }
         }

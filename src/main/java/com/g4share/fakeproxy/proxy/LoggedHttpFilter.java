@@ -1,6 +1,7 @@
 package com.g4share.fakeproxy.proxy;
 
 import com.g4share.fakeproxy.model.Filter;
+import com.g4share.fakeproxy.model.UpdatedData;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
@@ -24,14 +25,18 @@ import static com.g4share.fakeproxy.helper.Utils.extractHost;
 @Log4j2
 public class LoggedHttpFilter extends HttpFiltersAdapter {
     private final Filter filter;
+    private final UpdatedData updatedData;
     private final String host;
     private final boolean isHostFiltered;
 
+    private boolean isTlsTunnel = false;
+
     public LoggedHttpFilter(final HttpRequest originalRequest,
                             final ChannelHandlerContext ctx,
-                            final Filter filter) {
+                            final Filter filter, UpdatedData updatedData) {
         super(originalRequest, ctx);
         this.filter = filter;
+        this.updatedData = updatedData;
 
         host = extractHost(originalRequest);
         isHostFiltered = filter.isFiltered(host);
@@ -40,14 +45,26 @@ public class LoggedHttpFilter extends HttpFiltersAdapter {
     @Override
     public @Nullable HttpResponse clientToProxyRequest(final @Nullable HttpObject httpObject) {
         if (httpObject instanceof HttpRequest req && isHostFiltered) {
-            String fullUrl =  req.method() == HttpMethod.CONNECT
+            if (req.method() == HttpMethod.CONNECT) {
+                isTlsTunnel = true;
+            } else {
+                updateUrl(req);
+                updateHeaders(req);
+            }
+
+            String fullUrl = req.method() == HttpMethod.CONNECT || isTlsTunnel
                     ? req.uri()
                     : host + req.uri();
+
             log.info("\n>>> {} {}", req.method(), fullUrl);
             printHeaders("    ", req.headers());
         }
 
         if (httpObject instanceof FullHttpRequest fullReq && isHostFiltered) {
+            if (fullReq.method() != HttpMethod.CONNECT) {
+                updatedBody(fullReq);
+            }
+
             printBody(fullReq.content(), fullReq.headers());
         }
 
@@ -55,7 +72,7 @@ public class LoggedHttpFilter extends HttpFiltersAdapter {
     }
 
     @Override
-    public  HttpObject serverToProxyResponse(final HttpObject httpObject) {
+    public HttpObject serverToProxyResponse(final HttpObject httpObject) {
         if (httpObject instanceof HttpResponse resp) {
             log.info("\n<<< Response Status: {}", resp.status());
             printHeaders("    ", resp.headers());
@@ -68,10 +85,38 @@ public class LoggedHttpFilter extends HttpFiltersAdapter {
         return httpObject;
     }
 
+    private void updateUrl(HttpRequest req) {
+        if (updatedData == null || updatedData.url() == null || req.method() == HttpMethod.CONNECT) {
+            return;
+        }
+        req.setUri(updatedData.url() );
+    }
+
+    private void updateHeaders(HttpRequest req) {
+        if (updatedData == null || updatedData.headers() == null) {
+            return;
+        }
+
+        for (Map.Entry<String, String> entry : updatedData.headers().entrySet()) {
+            if (entry.getValue() != null) {
+                req.headers().set(entry.getKey(), entry.getValue());
+            } else {
+                req.headers().remove(entry.getKey());
+            }
+        }
+    }
+
+    private void updatedBody(FullHttpRequest fullReq) {
+        if (updatedData != null && updatedData.body() != null && updatedData.body().length > 0) {
+            fullReq.content().clear().writeBytes(updatedData.body());
+            fullReq.headers().set("Content-Length", updatedData.body().length);
+        }
+    }
+
     private void printHeaders(final String alignment, final HttpHeaders headers) {
-        Map<String, String> allowedHeaders = filter.filteredHeaders(headers);
-        for (Map.Entry<String, String> header : allowedHeaders.entrySet()) {
-            log.info("{}{}: {}", alignment, header.getKey(), header.getValue());
+        Map<String, String> logHeaders = filter.logHeaders(headers);
+        for (Map.Entry<String, String> logHeader : logHeaders.entrySet()) {
+            log.info("{}{}: {}", alignment, logHeader.getKey(), logHeader.getValue());
         }
     }
 

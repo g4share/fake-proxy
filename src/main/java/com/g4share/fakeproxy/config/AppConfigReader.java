@@ -1,5 +1,6 @@
 package com.g4share.fakeproxy.config;
 
+import com.g4share.fakeproxy.model.UpdatedData;
 import com.g4share.fakeproxy.proxy.AppConfig;
 
 public class AppConfigReader {
@@ -19,9 +20,16 @@ public class AppConfigReader {
             yamlConfigLoader.load("file://" + yamlConfigLoader, appConfig);
         }
 
-        CliConfigLoader cmdConfigLoader = new CliConfigLoader();
-        cmdConfigLoader.load(cliConfig, appConfig);
+        CliConfigLoader cliConfigLoader = new CliConfigLoader();
+        cliConfigLoader.load(cliConfig, appConfig);
 
         return appConfig;
+    }
+
+    public UpdatedData getUpdatedData(final String[] args) throws Exception {
+        CliConfig cliConfig = new CliConfig();
+        cliConfig.parseArgs(args);
+        CliConfigLoader cliConfigLoader = new CliConfigLoader();
+        return cliConfigLoader.getUpdatedData(cliConfig);
     }
 }

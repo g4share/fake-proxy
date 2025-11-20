@@ -56,7 +56,7 @@ public class YamlConfigLoader {
             if (filter == null) {
                 filter = new Filter();
             }
-            filter.setFilteredHeaders(filteredHeaders);
+            filter.setLogHeaders(filteredHeaders);
         }
 
         appConfig.setFilter(filter);

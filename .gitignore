@@ -1,8 +1,12 @@
 bin/
 target/
+.idea/
 *.jar
 *.class
 .classpath
 .project
 .settings
 *.versionsBackup
+
+*.p12
+*.pem

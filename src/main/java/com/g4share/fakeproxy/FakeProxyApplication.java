@@ -1,5 +1,6 @@
 package com.g4share.fakeproxy;
 
+import com.g4share.fakeproxy.model.UpdatedData;
 import com.g4share.fakeproxy.proxy.AppConfig;
 import com.g4share.fakeproxy.config.AppConfigReader;
 import com.g4share.fakeproxy.proxy.ChainedProxy;
@@ -14,12 +15,13 @@ import org.littleshoot.proxy.mitm.RootCertificateException;
 @Log4j2
 public class FakeProxyApplication {
 
-    private HttpProxyServerBootstrap bootstrapProxy(final AppConfig appConfig) throws RootCertificateException {
+    private HttpProxyServerBootstrap bootstrapProxy(final AppConfig appConfig, UpdatedData updatedData)
+            throws RootCertificateException {
         HttpProxyServerBootstrap bootstrap =
                 DefaultHttpProxyServer.bootstrap()
                         .withPort(appConfig.getPort())
                         .withManInTheMiddle(new CertificateSniffingMitmManager())
-                        .withFiltersSource(new FilterSource(appConfig.getFilter()));
+                        .withFiltersSource(new FilterSource(appConfig.getFilter(), updatedData));
 
         if (appConfig.getProxy() != null) {
             bootstrap.withChainProxyManager((req, chain, clientDetails) ->
@@ -32,12 +34,21 @@ public class FakeProxyApplication {
 
         AppConfigReader configReader = new AppConfigReader();
         AppConfig appConfig = configReader.getAppConfig(args);
+        UpdatedData updatedData = configReader.getUpdatedData(args);
 
         FakeProxyApplication app = new FakeProxyApplication();
-        var bootstrap = app.bootstrapProxy(appConfig);
+        var bootstrap = app.bootstrapProxy(appConfig, updatedData);
 
         HttpProxyServer server = bootstrap.start();
-        log.info("Proxy started on port {}", server.getListenAddress().getPort());
+        StringBuilder sb = new StringBuilder("Fake Proxy started on port ")
+                .append(server.getListenAddress().getPort());
+        if (appConfig.getProxy() != null) {
+            sb.append(" using upstream proxy: ")
+                    .append(appConfig.getProxy().getHost())
+                    .append(":")
+                    .append(appConfig.getProxy().getPort());
+        }
+        log.info(sb.toString());
 
         try {
             Thread.currentThread().join();
